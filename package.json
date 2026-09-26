@@ -1,0 +1,10 @@
+{
+  "name": "koyeb-apps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Routeur qui sert Kuzzle, Maboul du Mardoul et Odin sur un seul service Koyeb",
+  "main": "gateway.js",
+  "scripts": {
+    "start": "node gateway.js"
+  }
+}
