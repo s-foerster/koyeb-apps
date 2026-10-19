@@ -1,12 +1,14 @@
 # syntax=docker/dockerfile:1
 #
-# Un seul service Koyeb pour trois apps :
+# Un seul service Koyeb pour quatre apps :
 #   /        -> Kuzzle (hearts_game)
 #   /maboul/ -> Maboul du Mardoul
 #   /odin/   -> Odin
+#   /trio/   -> Trio
 #
 # Le code de chaque app est récupéré depuis son dépôt GitHub au moment du build
 # (branche main par défaut). Pour déployer une nouvelle version d'une app :
+# push sur son dépôt, puis bouton "Redeploy" du service dans Koyeb. Pour déployer une nouvelle version d'une app :
 # push sur son dépôt, puis bouton "Redeploy" du service dans Koyeb.
 
 ARG NODE_VERSION=22
@@ -41,6 +43,12 @@ ARG ODIN_REF=main
 RUN git clone --depth 1 --branch "${ODIN_REF}" "https://github.com/${ODIN_REPO}.git" /repo \
  && rm -rf /repo/.git
 
+FROM git AS trio-src
+ARG TRIO_REPO=s-foerster/trio
+ARG TRIO_REF=main
+RUN git clone --depth 1 --branch "${TRIO_REF}" "https://github.com/${TRIO_REPO}.git" /repo \
+ && rm -rf /repo/.git
+
 # ── Build Kuzzle (hearts_game) ───────────────────────────────────────────────
 FROM base AS hearts-build
 COPY --from=hearts-src /repo/ ./
@@ -73,6 +81,11 @@ RUN npm ci --include=dev \
  && npm prune --omit=dev \
  && npm cache clean --force
 
+# ── Build Trio (aucune dépendance npm) ───────────────────────────────────────
+FROM base AS trio-build
+COPY --from=trio-src /repo/ ./
+RUN rm -rf test
+
 # ── Image finale ─────────────────────────────────────────────────────────────
 FROM base
 ENV NODE_ENV=production \
@@ -81,6 +94,7 @@ ENV NODE_ENV=production \
 COPY --from=hearts-build /app ./apps/hearts
 COPY --from=maboul-build /app ./apps/maboul
 COPY --from=odin-build   /app ./apps/odin
+COPY --from=trio-build   /app ./apps/trio
 COPY package.json gateway.js ./
 
 EXPOSE 8000

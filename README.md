@@ -1,21 +1,22 @@
 # koyeb-apps
 
-Un seul service Koyeb (plan gratuit) qui sert trois projets sur la même adresse :
+Un seul service Koyeb (plan gratuit) qui sert quatre projets sur la même adresse :
 
 | Chemin | App | Dépôt |
 |---|---|---|
 | `/` | Kuzzle (hearts_game) | `s-foerster/Kuzzle` |
 | `/maboul/` | Le Maboul du Mardoul | `Teqih/maboul-du-mardoul` |
 | `/odin/` | Odin | `s-foerster/odin` |
+| `/trio/` | Trio | `s-foerster/trio` |
 
 ## Comment ça marche
 
-- `gateway.js` est le seul processus exposé (port `8000`). Il lance les 3 apps sur des ports internes (3001, 3002, 3003) et envoie chaque requête à la bonne app selon le chemin, WebSockets compris.
-- Le préfixe (`/maboul`, `/odin`) est retiré avant d'arriver à l'app : côté serveur, chaque app croit être à la racine. Seul le front de Maboul et d'Odin a été adapté pour utiliser le bon préfixe.
+- `gateway.js` est le seul processus exposé (port `8000`). Il lance les 4 apps sur des ports internes (3001, 3002, 3003, 3004) et envoie chaque requête à la bonne app selon le chemin, WebSockets compris.
+- Le préfixe (`/maboul`, `/odin`, `/trio`) est retiré avant d'arriver à l'app : côté serveur, chaque app croit être à la racine. Seul le front de Maboul, d'Odin et de Trio utilise le bon préfixe (chemins relatifs).
 - Kuzzle reste à la racine, donc rien ne change pour lui : même domaine, mêmes URLs Stripe et Supabase, même SEO.
 - Si une app plante, le routeur la relance automatiquement.
 - `gateway.js` n'a aucune dépendance npm.
-- Le `Dockerfile` clone les 3 dépôts GitHub (branche `main`) au moment du build.
+- Le `Dockerfile` clone les 4 dépôts GitHub (branche `main`) au moment du build.
 
 ## Mise en place
 
@@ -60,7 +61,8 @@ Ensuite, vérifie ces adresses (remplace par ton adresse Koyeb) :
 - `https://ton-app.koyeb.app/` → Kuzzle
 - `https://ton-app.koyeb.app/maboul/` → Maboul du Mardoul
 - `https://ton-app.koyeb.app/odin/` → Odin
-- `https://ton-app.koyeb.app/__gateway/health` → état des 3 apps
+- `https://ton-app.koyeb.app/trio/` → Trio
+- `https://ton-app.koyeb.app/__gateway/health` → état des 4 apps
 
 ### Mettre à jour une app plus tard
 
@@ -76,7 +78,17 @@ Si le service manque de mémoire (redémarrages, erreurs « OOM » dans les logs
 | Variable | Effet |
 |---|---|
 | `VOICE_MESSAGES_DISABLED=true` | Odin : masque le bouton micro et le serveur refuse les vocaux (pas de ffmpeg). Nécessite un **Redeploy**. |
-| `DISABLED_APPS=odin` | Ne lance pas une app. Plusieurs valeurs possibles : `odin,maboul`. |
+| `DISABLED_APPS=odin` | Ne lance pas une app. Plusieurs valeurs possibles : `odin,maboul,trio`. |
+
+Trio est très léger (aucune dépendance npm, mémoire plafonnée à 64 Mo par `--max-old-space-size`).
+
+## Trio
+
+Jeu de cartes Trio (règles officielles Cogitum / Cocktail Games), dépôt `s-foerster/trio` (local : `Documents\dev\trio`). Voir son README.
+
+- Créer / rejoindre une partie avec un code à 4 chiffres, ajouter des bots (facile, normal, expert).
+- Modes simple et piquant, mode équipes à 4 ou 6.
+- Aucune dépendance npm (serveur HTTP + WebSocket maison).
 
 ## Modifications faites dans les projets
 
@@ -106,4 +118,6 @@ docker build -t koyeb-apps `
 docker run --rm -p 8000:8000 --env-file ..\hearts_game\.env -e PORT=8000 koyeb-apps
 ```
 
-Puis ouvre <http://localhost:8000/>, <http://localhost:8000/maboul/> et <http://localhost:8000/odin/>.
+Puis ouvre <http://localhost:8000/>, <http://localhost:8000/maboul/>, <http://localhost:8000/odin/> et <http://localhost:8000/trio/>.
+
+Trio tout seul, sans Docker : `cd ..\trio; node server.js` puis <http://localhost:3004/>.
