@@ -1,0 +1,117 @@
+# Redéploie le service Koyeb (sans cache de build) quand un des projets change.
+#
+# - push sur main de koyeb-apps        -> redéploiement immédiat
+# - toutes les 5 min                   -> regarde le dernier commit de main de Kuzzle, Maboul,
+#                                         Odin et Trio ; redéploie seulement si l'un a changé
+# - lancement manuel (onglet Actions)  -> redéploiement immédiat
+#
+# Réglage du dépôt (Settings > Secrets and variables > Actions) :
+#   secret KOYEB_TOKEN : jeton API Koyeb (Koyeb > Settings > API)
+# Le service Koyeb visé est fixé plus bas (KOYEB_SERVICE_ID), une variable du dépôt du même nom le remplace.
+name: Déploiement Koyeb
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      use_cache:
+        description: 'Utiliser le cache de build (plus rapide, mais peut garder une ancienne version des apps)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: koyeb-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KOYEB_TOKEN: ${{ secrets.KOYEB_TOKEN }}
+      KOYEB_SERVICE_ID: ${{ vars.KOYEB_SERVICE_ID || 'e839419f-12eb-4b1d-86bc-f0af950ab8c5' }}
+      API: https://app.koyeb.com/v1
+    steps:
+      - name: Dernier commit de chaque dépôt
+        id: heads
+        run: |
+          set -euo pipefail
+          all=""
+          for repo in s-foerster/koyeb-apps s-foerster/Kuzzle Teqih/maboul-du-mardoul s-foerster/odin s-foerster/trio; do
+            sha=$(git ls-remote "https://github.com/$repo" refs/heads/main | cut -f1)
+            if [ -z "$sha" ]; then echo "::error::Impossible de lire main de $repo"; exit 1; fi
+            echo "$repo ${sha:0:7}"
+            all="$all$repo=$sha;"
+          done
+          echo "key=koyeb-heads-$(printf '%s' "$all" | sha256sum | cut -c1-20)" >> "$GITHUB_OUTPUT"
+
+      - name: Déjà déployé ?
+        id: seen
+        if: github.event_name == 'schedule'
+        uses: actions/cache/restore@v4
+        with:
+          path: .koyeb-deployed
+          key: ${{ steps.heads.outputs.key }}
+          lookup-only: true
+
+      - name: Redéployer sur Koyeb
+        id: redeploy
+        if: github.event_name != 'schedule' || steps.seen.outputs.cache-hit != 'true'
+        env:
+          USE_CACHE: ${{ inputs.use_cache == true && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KOYEB_TOKEN" ]; then
+            echo "::warning::Secret KOYEB_TOKEN pas encore configuré (Settings > Secrets and variables > Actions) : rien n'est déployé."
+            exit 0
+          fi
+          res=$(curl -fsS -X POST "$API/services/$KOYEB_SERVICE_ID/redeploy" \
+            -H "Authorization: Bearer $KOYEB_TOKEN" -H 'Content-Type: application/json' \
+            -d "{\"deployment_group\":\"prod\",\"use_cache\":$USE_CACHE}")
+          id=$(echo "$res" | jq -r '.deployment.id // empty')
+          echo "Déploiement lancé : ${id:-?} (cache : $USE_CACHE)"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Mémoriser les versions déployées
+        if: steps.redeploy.outputs.id != ''
+        run: mkdir -p .koyeb-deployed && date -u > .koyeb-deployed/at
+
+      - uses: actions/cache/save@v4
+        if: steps.redeploy.outputs.id != ''
+        continue-on-error: true
+        with:
+          path: .koyeb-deployed
+          key: ${{ steps.heads.outputs.key }}
+
+      - name: Attendre la fin du déploiement
+        if: steps.redeploy.outputs.id != ''
+        env:
+          ID: ${{ steps.redeploy.outputs.id }}
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 100); do
+            status=$(curl -fsS "$API/deployments/$ID" -H "Authorization: Bearer $KOYEB_TOKEN" | jq -r '.deployment.status')
+            echo "$(date -u +%H:%M:%S) $status"
+            case "$status" in
+              HEALTHY) echo "Déploiement terminé."; exit 0 ;;
+              ERROR|ERRORING|UNHEALTHY|CANCELED|CANCELING|STOPPED)
+                echo "::error::Le déploiement Koyeb a échoué ($status). Voir les logs de build dans Koyeb."; exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "::warning::Toujours en cours après 25 min, voir Koyeb."
+
+      # GitHub coupe les tâches planifiées d'un dépôt public après 60 jours sans activité :
+      # on réactive ce workflow à chaque passage pour qu'il ne s'arrête jamais.
+      - name: Garder la surveillance active
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/koyeb-deploy.yml/enable" >/dev/null || true

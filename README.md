@@ -64,10 +64,24 @@ Ensuite, vérifie ces adresses (remplace par ton adresse Koyeb) :
 - `https://ton-app.koyeb.app/trio/` → Trio
 - `https://ton-app.koyeb.app/__gateway/health` → état des 4 apps
 
+### Déploiement automatique (GitHub Actions)
+
+Le workflow `.github/workflows/koyeb-deploy.yml` redéploie le service **sans cache de build** :
+
+- à chaque push sur `main` de `koyeb-apps` ;
+- toutes les 5 minutes, il regarde le dernier commit de `main` de Kuzzle, Maboul, Odin et Trio, et redéploie seulement si l'un d'eux a changé (délai de 5 à 15 min après un push, GitHub ne lance pas les tâches planifiées à la minute près) ;
+- à la demande : onglet **Actions** du dépôt > **Déploiement Koyeb** > **Run workflow**.
+
+Le workflow attend la fin du déploiement et échoue si Koyeb signale une erreur : GitHub t'envoie alors un e-mail.
+
+Réglage : secret `KOYEB_TOKEN` (jeton API Koyeb, créé dans Koyeb > Settings > API) dans **Settings > Secrets and variables > Actions** de ce dépôt. L'identifiant du service est écrit dans le workflow.
+
+L'option **Autodeploy** de Koyeb est encore active : un push sur `koyeb-apps` lance aussi un build Koyeb avec cache, puis le workflow en relance un sans cache. Le résultat final est bon ; pour éviter ce double build, décoche **Autodeploy** dans Koyeb (Settings > Source).
+
 ### Mettre à jour une app plus tard
 
-1. Push sur le dépôt de l'app.
-2. Dans Koyeb, clique sur **Redeploy**. Ça reconstruit sans cache, donc le code le plus récent de chaque dépôt est récupéré.
+1. Push sur le dépôt de l'app : le workflow ci-dessus redéploie tout seul.
+2. Pour forcer à la main : dans Koyeb, **Redeploy** > **Trigger build** en décochant **Use build cache**.
 
 Un simple push sur `koyeb-apps` ne suffit pas toujours : Koyeb réutilise son cache et risque de garder l'ancienne version des apps.
 
