@@ -77,7 +77,8 @@ jobs:
             -d "{\"deployment_group\":\"prod\",\"use_cache\":$USE_CACHE}")
           id=$(echo "$res" | jq -r '.deployment.id // empty')
           echo "Déploiement lancé : ${id:-?} (cache : $USE_CACHE)"
-          echo "id=$id" >> "$GITHUB_OUTPUT"
+          # "started" même sans identifiant, pour ne pas redéployer en boucle
+          echo "id=${id:-started}" >> "$GITHUB_OUTPUT"
 
       - name: Mémoriser les versions déployées
         if: steps.redeploy.outputs.id != ''
@@ -91,7 +92,7 @@ jobs:
           key: ${{ steps.heads.outputs.key }}
 
       - name: Attendre la fin du déploiement
-        if: steps.redeploy.outputs.id != ''
+        if: steps.redeploy.outputs.id != '' && steps.redeploy.outputs.id != 'started'
         env:
           ID: ${{ steps.redeploy.outputs.id }}
         run: |
