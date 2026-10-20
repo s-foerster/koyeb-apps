@@ -1,17 +1,18 @@
 /**
  * Routeur multi-apps pour un seul service Koyeb.
  *
- * - Lance les 4 apps comme processus enfants, chacune sur un port interne.
+ * - Lance les 5 apps comme processus enfants, chacune sur un port interne.
  * - Expose un seul port public (PORT, 8000 sur Koyeb) et route par chemin :
  *     /maboul/...  -> Maboul du Mardoul (port 3002)
  *     /odin/...    -> Odin               (port 3003)
  *     /trio/...    -> Trio               (port 3004)
+ *     /flip7/...   -> Flip 7             (port 3005)
  *     tout le reste -> Kuzzle / hearts_game (port 3001), inchangé à la racine
  * - Le préfixe est retiré avant de transmettre : chaque app croit être à "/".
- * - Gère les WebSockets (socket.io pour Maboul, ws pour Odin et Trio).
+ * - Gère les WebSockets (socket.io pour Maboul, ws pour Odin, Trio et Flip 7).
  * - Redémarre une app si elle plante.
  *
- * DISABLED_APPS=odin,maboul,trio permet de désactiver une app (pour économiser la mémoire).
+ * DISABLED_APPS=odin,maboul,trio,flip7 permet de désactiver une app (pour économiser la mémoire).
  *
  * Aucune dépendance npm : uniquement les modules intégrés à Node.
  */
@@ -56,6 +57,15 @@ const APPS = [
     port: 3004,
     cwd: path.join(APPS_DIR, 'trio'),
     // Petite app sans dépendance : on plafonne sa mémoire pour laisser de la place aux autres
+    args: ['--max-old-space-size=64', 'server.js'],
+    env: { NODE_ENV: 'production' },
+  },
+  {
+    name: 'flip7',
+    prefix: '/flip7',
+    port: 3005,
+    cwd: path.join(APPS_DIR, 'flip7'),
+    // Petite app sans dépendance, comme Trio
     args: ['--max-old-space-size=64', 'server.js'],
     env: { NODE_ENV: 'production' },
   },

@@ -2,7 +2,7 @@
 #
 # - push sur main de koyeb-apps        -> redéploiement immédiat
 # - toutes les 5 min                   -> regarde le dernier commit de main de Kuzzle, Maboul,
-#                                         Odin et Trio ; redéploie seulement si l'un a changé
+#                                         Odin, Trio et Flip 7 ; redéploie seulement si l'un a changé
 # - lancement manuel (onglet Actions)  -> redéploiement immédiat
 #
 # Réglage du dépôt (Settings > Secrets and variables > Actions) :
@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           all=""
-          for repo in s-foerster/koyeb-apps s-foerster/Kuzzle Teqih/maboul-du-mardoul s-foerster/odin s-foerster/trio; do
+          for repo in s-foerster/koyeb-apps s-foerster/Kuzzle Teqih/maboul-du-mardoul s-foerster/odin s-foerster/trio s-foerster/flip7; do
             sha=$(git ls-remote "https://github.com/$repo" refs/heads/main | cut -f1)
             if [ -z "$sha" ]; then echo "::error::Impossible de lire main de $repo"; exit 1; fi
             echo "$repo ${sha:0:7}"
